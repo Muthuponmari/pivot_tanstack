@@ -1,13 +1,11 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 
 import { useReactTable, getCoreRowModel, getExpandedRowModel, flexRender } from '@tanstack/react-table';
-import { useVirtualizer } from '@tanstack/react-virtual';
 
 export default function PivotTable({ data }) {
     console.log(data);
     const [expandedGroups, setExpandedGroups] = useState([]);
     const [expanded, setExpanded] = React.useState({})
-    const valueAggregation = "Count of Sales Manager"
 
     const columns = useMemo(() => {
         function generateColumns(data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
@@ -127,17 +125,6 @@ export default function PivotTable({ data }) {
         debugTable: true,
     })
 
-    const { rows } = table.getRowModel();
-
-    const parentRef = React.useRef(null);
-
-    const rowVirtualizer = useVirtualizer({
-        count: rows.length,
-        getScrollElement: () => parentRef.current,
-        estimateSize: useCallback(() => 35, []),
-        overscan: 10,
-    });
-
     const renderRow = React.useCallback((row) => {
         return (
             <React.Fragment key={row.id}>
@@ -168,7 +155,7 @@ export default function PivotTable({ data }) {
     }, [])
 
     return (
-        <div ref={parentRef} style={{ height: '400px', overflow: 'auto' }}>
+        <div style={{ height: '400px', overflow: 'auto' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead>
                     {table.getHeaderGroups().map(headerGroup => (
