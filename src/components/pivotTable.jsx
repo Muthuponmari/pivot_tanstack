@@ -6,7 +6,6 @@ export default function PivotTable({ data }) {
     console.log(data);
     const [expandedGroups, setExpandedGroups] = useState([]);
     const [expanded, setExpanded] = React.useState({})
-
     const columns = useMemo(() => {
         function generateColumns(data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
             const [currentMeta, ...remainingMeta] = columnsMetadata;
@@ -15,6 +14,7 @@ export default function PivotTable({ data }) {
             const columns = uniqueValues.map((value, index) => {
                 const groupId = parentId ? `${parentId}_${currentMeta.Id}_${value}` : `${currentMeta.Id}_${value}`;
                 const subItems = data.filter(item => item[currentMeta.Id] === value);
+                const isExpanded = expandedGroups.includes(groupId);
 
                 if (remainingMeta.length === 0) {
                     return {
@@ -25,7 +25,6 @@ export default function PivotTable({ data }) {
                             id: `${groupId}_${valueCol.Id}`,
                             accessorFn: row => row[currentMeta.Id] === value ? row[valueCol.Id] : null,
                             aggregationFn: valueCol.AggregationFunction.toLowerCase(),
-                            show: expandedGroups.includes(groupId)
                         })),
                         enableGrouping: true
                     };
@@ -47,11 +46,11 @@ export default function PivotTable({ data }) {
                             onClick={() => toggleGroupExpansion(groupId)}
                             style={{ cursor: 'pointer' }}
                         >
-                            {value} {expandedGroups.includes(groupId) ? '▼' : '▶'}
+                            {value} {isExpanded ? '▼' : '▶'}
                         </div>
                     ),
                     id: groupId,
-                    columns: subColumns,
+                    columns: isExpanded ? subColumns : [],
                 };
             });
 
@@ -66,11 +65,15 @@ export default function PivotTable({ data }) {
         }
 
         const toggleGroupExpansion = (groupId) => {
-            setExpandedGroups(prev =>
-                prev.includes(groupId)
-                    ? prev.filter(id => id !== groupId)
-                    : [...prev, groupId]
-            );
+            setExpandedGroups(prev => {
+                if (prev.includes(groupId)) {
+                    // If the group is expanded, collapse it and all its subgroups
+                    return prev.filter(id => !id.startsWith(groupId));
+                } else {
+                    // If the group is collapsed, expand it
+                    return [...prev, groupId];
+                }
+            });
         };
 
         const baseColumn = {
@@ -130,7 +133,7 @@ export default function PivotTable({ data }) {
             <React.Fragment key={row.id}>
                 <tr>
                     {row.getVisibleCells().map(cell => (
-                        <td key={cell.id} style={{ borderBottom: '1px solid #ddd', padding: '8px' }}>
+                        <td key={cell.id} style={{ border: '1px solid black', padding: '8px' }}>
                             {cell.column.id === 'groupedColumn' ? (
                                 <div style={{ display: 'flex', alignItems: 'center', paddingLeft: `${row.depth * 20}px` }}>
                                     {row.subRows?.length > 0 && (
