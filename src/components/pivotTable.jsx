@@ -9,7 +9,7 @@ export default function PivotTable({ data }) {
     const columns = useMemo(() => {
         function generateColumns(data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
             const [currentMeta, ...remainingMeta] = columnsMetadata;
-            const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))];
+            const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
 
             const columns = uniqueValues.map((value, index) => {
                 const groupId = parentId ? `${parentId}_${currentMeta.Id}_${value}` : `${currentMeta.Id}_${value}`;
@@ -30,6 +30,11 @@ export default function PivotTable({ data }) {
                     };
                 }
 
+                function calculateTotal(row, value) {
+                    const dodgeCars = row.originalSubRows.filter(item => item[currentMeta.Id] === value);
+                    const totalValue = dodgeCars.reduce((sum, item) => sum + item.Value_GJYZ0tJE5V, 0);
+                    return totalValue
+                }
                 const subColumns = generateColumns(
                     subItems,
                     remainingMeta,
@@ -51,6 +56,11 @@ export default function PivotTable({ data }) {
                     ),
                     id: groupId,
                     columns: isExpanded ? subColumns : [],
+                    accessorFn: (row) => row,
+                    cell: ({ row, getValue }) => {
+                        const totalValue = calculateTotal(row, value);
+                        return totalValue > 0 ? totalValue : '';
+                    }
                 };
             });
 
@@ -103,7 +113,7 @@ export default function PivotTable({ data }) {
 
     const tableData = useMemo(() => {
         const rowID = data.Rows[0].Id;
-        const uniqueTopLevelValues = Array.from(new Set(data.Data.map(row => row[rowID])));
+        const uniqueTopLevelValues = Array.from(new Set(data.Data.map(row => row[rowID]))).sort();
 
         return uniqueTopLevelValues.map(topLevelValue => ({
             [rowID]: topLevelValue,
@@ -158,16 +168,24 @@ export default function PivotTable({ data }) {
     }, [])
 
     return (
-        <div style={{ height: '400px', overflow: 'auto' }}>
+        <div style={{ height: '400px', overflow: 'auto', background: 'white' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
-                <thead>
+                <thead style={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                    background: '#ddd',
+                }}>
                     {table.getHeaderGroups().map(headerGroup => (
                         <tr key={headerGroup.id}>
                             {headerGroup.headers.map(header => (
                                 <th
                                     key={header.id}
                                     colSpan={header.colSpan}
-                                    style={{ border: '1px solid black', padding: '8px' }}
+                                    style={{
+                                        padding: '8px',
+                                        border: '1px solid black'
+                                    }}
                                 >
                                     {header.isPlaceholder ? null :
                                         header.depth === 0 ?
