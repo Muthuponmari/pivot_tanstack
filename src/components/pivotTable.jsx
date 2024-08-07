@@ -30,11 +30,20 @@ export default function PivotTable({ data }) {
                     };
                 }
 
-                function calculateTotal(row, value) {
-                    const dodgeCars = row.originalSubRows.filter(item => item[currentMeta.Id] === value);
-                    const totalValue = dodgeCars.reduce((sum, item) => sum + item.Value_GJYZ0tJE5V, 0);
-                    return totalValue
+                function calculateTotal(row, value, currentMeta) {
+                    let rowValue = [];
+                    if (Array.isArray(row.originalSubRows)) {
+                        rowValue = row.originalSubRows.filter(item => item[currentMeta.Id] === value);
+                    }
+                    if (!row.originalSubRows) {
+                        if (row.original && row.original[currentMeta.Id] === value) {
+                            rowValue = [row.original];
+                        }
+                    }
+                    const totalValue = rowValue.reduce((sum, item) => sum + item[values[0].Id], 0);
+                    return totalValue;
                 }
+
                 const subColumns = generateColumns(
                     subItems,
                     remainingMeta,
@@ -58,7 +67,7 @@ export default function PivotTable({ data }) {
                     columns: isExpanded ? subColumns : [],
                     accessorFn: (row) => row,
                     cell: ({ row, getValue }) => {
-                        const totalValue = calculateTotal(row, value);
+                        const totalValue = calculateTotal(row, value, currentMeta);
                         return totalValue > 0 ? totalValue : '';
                     }
                 };
@@ -138,37 +147,27 @@ export default function PivotTable({ data }) {
         debugTable: true,
     })
 
-    const renderRow = React.useCallback((row) => {
-        return (
-            <React.Fragment key={row.id}>
-                <tr>
-                    {row.getVisibleCells().map(cell => (
-                        <td key={cell.id} style={{ border: '1px solid black', padding: '8px' }}>
-                            {cell.column.id === 'groupedColumn' ? (
-                                <div style={{ display: 'flex', alignItems: 'center', paddingLeft: `${row.depth * 20}px` }}>
-                                    {row.subRows?.length > 0 && (
-                                        <button
-                                            onClick={() => row.toggleExpanded()}
-                                            style={{ cursor: 'pointer', marginRight: '5px' }}
-                                        >
-                                            {row.getIsExpanded() ? '▼' : '▶'}
-                                        </button>
-                                    )}
-                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                </div>
-                            ) : (
-                                    flexRender(cell.column.columnDef.cell, cell.getContext())
-                                )}
-                        </td>
-                    ))}
-                </tr>
-                {row.getIsExpanded() && row.subRows.map(subRow => renderRow(subRow))}
-            </React.Fragment>
-        )
+    const renderCell = React.useCallback((cell) => {
+        const row = cell.row;
+        if (cell.column.id === 'groupedColumn') {
+            return (
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ width: `${row.depth * 20}px` }}></span> {/* Add indentation */}
+                    <button
+                        onClick={() => row.toggleExpanded()}
+                        style={{ cursor: 'pointer', marginRight: '5px' }}
+                    >
+                        {row.getIsExpanded() ? '▼' : '▶'}
+                    </button>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </div>
+            )
+        }
+        return flexRender(cell.column.columnDef.cell, cell.getContext())
     }, [])
 
     return (
-        <div style={{ height: '400px', overflow: 'auto', background: 'white' }}>
+        <div style={{ height: '700px', overflow: 'auto', background: 'white' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead style={{
                     position: 'sticky',
@@ -198,7 +197,15 @@ export default function PivotTable({ data }) {
                     ))}
                 </thead>
                 <tbody>
-                    {table.getRowModel().rows.map(row => renderRow(row))}
+                    {table.getRowModel().rows.map(row => (
+                        <tr key={row.id}>
+                            {row.getVisibleCells().map(cell => (
+                                <td key={cell.id} style={{ border: '1px solid black', padding: '8px' }}>
+                                    {renderCell(cell)}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
                 </tbody>
             </table>
         </div>
