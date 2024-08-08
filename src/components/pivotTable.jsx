@@ -25,13 +25,25 @@ export default function PivotTable({ data }) {
     const generateColumns = function (data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
         const [currentMeta, ...remainingMeta] = columnsMetadata;
         const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
-        const calculateTotal = function (row, value, currentMeta) {
+        const calculateTotal = function (row, groupId) {
+            let parts = groupId.split('-');
+            let criteria = {};
+            for (let i = 0; i < parts.length; i += 2) {
+                let key = parts[i];
+                let value = parts[i + 1];
+                criteria[key] = value;
+            }
+            let value = parts[parts.length - 1];
+            let columnId = parts[parts.length - 2];
+
             let rowValue = [];
             if (Array.isArray(row.originalSubRows)) {
-                rowValue = row.originalSubRows.filter(item => item[currentMeta.Id] === value);
+                rowValue = row.originalSubRows.filter(item => {
+                    return Object.keys(criteria).every(key => item[key] === criteria[key]);
+                });
             }
             if (!row.originalSubRows) {
-                if (row.original && row.original[currentMeta.Id] === value) {
+                if (row.original && row.original[columnId] === value) {
                     rowValue = [row.original];
                 }
             }
@@ -40,7 +52,7 @@ export default function PivotTable({ data }) {
         }
 
         const columns = uniqueValues.map((value, index) => {
-            const groupId = parentId ? `${parentId}_${currentMeta.Id}_${value}` : `${currentMeta.Id}_${value}`;
+            const groupId = parentId ? `${parentId}-${currentMeta.Id}-${value}` : `${currentMeta.Id}-${value}`;
             const subItems = data.filter(item => item[currentMeta.Id] === value);
             const isExpanded = expandedGroups.includes(groupId);
 
@@ -51,8 +63,11 @@ export default function PivotTable({ data }) {
                     columns: values.map(valueCol => ({
                         header: isTopLevel ? valueCol.Name : '',
                         id: `${groupId}_${valueCol.Id}`,
-                        accessorFn: row => row[currentMeta.Id] === value ? row[valueCol.Id] : null,
-                        aggregationFn: valueCol.AggregationFunction.toLowerCase(),
+                        accessorFn: (row) => row,
+                        cell: ({ row, getValue }) => {
+                            const totalValue = calculateTotal(row, groupId);
+                            return totalValue > 0 ? totalValue : '';
+                        }
                     })),
                     enableGrouping: true
                 };
@@ -81,7 +96,7 @@ export default function PivotTable({ data }) {
                 columns: isExpanded ? subColumns : [],
                 accessorFn: (row) => row,
                 cell: ({ row, getValue }) => {
-                    const totalValue = calculateTotal(row, value, currentMeta);
+                    const totalValue = calculateTotal(row, groupId);
                     return totalValue > 0 ? totalValue : '';
                 }
             };
