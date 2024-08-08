@@ -26,7 +26,7 @@ export default function PivotTable({ data }) {
         const [currentMeta, ...remainingMeta] = columnsMetadata;
         const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
         const calculateTotal = function (row, groupId) {
-            let parts = groupId.split('-');
+            let parts = groupId.split('::');
             let criteria = {};
             for (let i = 0; i < parts.length; i += 2) {
                 let key = parts[i];
@@ -52,7 +52,7 @@ export default function PivotTable({ data }) {
         }
 
         const columns = uniqueValues.map((value, index) => {
-            const groupId = parentId ? `${parentId}-${currentMeta.Id}-${value}` : `${currentMeta.Id}-${value}`;
+            const groupId = parentId ? `${parentId}::${currentMeta.Id}::${value}` : `${currentMeta.Id}::${value}`;
             const subItems = data.filter(item => item[currentMeta.Id] === value);
             const isExpanded = expandedGroups.includes(groupId);
 
@@ -62,7 +62,7 @@ export default function PivotTable({ data }) {
                     id: groupId,
                     columns: values.map(valueCol => ({
                         header: isTopLevel ? valueCol.Name : '',
-                        id: `${groupId}_${valueCol.Id}`,
+                        id: `${groupId}::${valueCol.Id}`,
                         accessorFn: (row) => row,
                         cell: ({ row, getValue }) => {
                             const totalValue = calculateTotal(row, groupId);
