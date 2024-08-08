@@ -3,98 +3,101 @@ import React, { useMemo, useState } from 'react';
 import { useReactTable, getCoreRowModel, getExpandedRowModel, flexRender } from '@tanstack/react-table';
 
 export default function PivotTable({ data }) {
-    console.log(data);
     const [expandedGroups, setExpandedGroups] = useState([]);
     const [expanded, setExpanded] = React.useState({})
-    const columns = useMemo(() => {
-        function generateColumns(data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
-            const [currentMeta, ...remainingMeta] = columnsMetadata;
-            const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
 
-            const columns = uniqueValues.map((value, index) => {
-                const groupId = parentId ? `${parentId}_${currentMeta.Id}_${value}` : `${currentMeta.Id}_${value}`;
-                const subItems = data.filter(item => item[currentMeta.Id] === value);
-                const isExpanded = expandedGroups.includes(groupId);
+    const CustomHeader = ({ column }) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {column.columnDef.header}
+        </div>
+    );
 
-                if (remainingMeta.length === 0) {
-                    return {
-                        header: value,
-                        id: groupId,
-                        columns: values.map(valueCol => ({
-                            header: isTopLevel ? valueCol.Name : '',
-                            id: `${groupId}_${valueCol.Id}`,
-                            accessorFn: row => row[currentMeta.Id] === value ? row[valueCol.Id] : null,
-                            aggregationFn: valueCol.AggregationFunction.toLowerCase(),
-                        })),
-                        enableGrouping: true
-                    };
-                }
-
-                function calculateTotal(row, value, currentMeta) {
-                    let rowValue = [];
-                    if (Array.isArray(row.originalSubRows)) {
-                        rowValue = row.originalSubRows.filter(item => item[currentMeta.Id] === value);
-                    }
-                    if (!row.originalSubRows) {
-                        if (row.original && row.original[currentMeta.Id] === value) {
-                            rowValue = [row.original];
-                        }
-                    }
-                    const totalValue = rowValue.reduce((sum, item) => sum + item[values[0].Id], 0);
-                    return totalValue;
-                }
-
-                const subColumns = generateColumns(
-                    subItems,
-                    remainingMeta,
-                    values,
-                    expandedGroups,
-                    toggleGroupExpansion,
-                    false,
-                    groupId
-                );
-
-                return {
-                    header: () => (
-                        <div
-                            onClick={() => toggleGroupExpansion(groupId)}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            {value} {isExpanded ? '▼' : '▶'}
-                        </div>
-                    ),
-                    id: groupId,
-                    columns: isExpanded ? subColumns : [],
-                    accessorFn: (row) => row,
-                    cell: ({ row, getValue }) => {
-                        const totalValue = calculateTotal(row, value, currentMeta);
-                        return totalValue > 0 ? totalValue : '';
-                    }
-                };
-            });
-
-            if (isTopLevel) {
-                return [{
-                    header: currentMeta.Name,
-                    id: currentMeta.Id,
-                    columns: columns
-                }];
+    const toggleGroupExpansion = (groupId) => {
+        setExpandedGroups(prev => {
+            if (prev.includes(groupId)) {
+                return prev.filter(id => !id.startsWith(groupId));
+            } else {
+                return [...prev, groupId];
             }
-            return columns;
+        });
+    };
+
+    const generateColumns = function (data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
+        const [currentMeta, ...remainingMeta] = columnsMetadata;
+        const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
+        const calculateTotal = function (row, value, currentMeta) {
+            let rowValue = [];
+            if (Array.isArray(row.originalSubRows)) {
+                rowValue = row.originalSubRows.filter(item => item[currentMeta.Id] === value);
+            }
+            if (!row.originalSubRows) {
+                if (row.original && row.original[currentMeta.Id] === value) {
+                    rowValue = [row.original];
+                }
+            }
+            const totalValue = rowValue.reduce((sum, item) => sum + item[values[0].Id], 0);
+            return totalValue;
         }
 
-        const toggleGroupExpansion = (groupId) => {
-            setExpandedGroups(prev => {
-                if (prev.includes(groupId)) {
-                    // If the group is expanded, collapse it and all its subgroups
-                    return prev.filter(id => !id.startsWith(groupId));
-                } else {
-                    // If the group is collapsed, expand it
-                    return [...prev, groupId];
-                }
-            });
-        };
+        const columns = uniqueValues.map((value, index) => {
+            const groupId = parentId ? `${parentId}_${currentMeta.Id}_${value}` : `${currentMeta.Id}_${value}`;
+            const subItems = data.filter(item => item[currentMeta.Id] === value);
+            const isExpanded = expandedGroups.includes(groupId);
 
+            if (remainingMeta.length === 0) {
+                return {
+                    header: value,
+                    id: groupId,
+                    columns: values.map(valueCol => ({
+                        header: isTopLevel ? valueCol.Name : '',
+                        id: `${groupId}_${valueCol.Id}`,
+                        accessorFn: row => row[currentMeta.Id] === value ? row[valueCol.Id] : null,
+                        aggregationFn: valueCol.AggregationFunction.toLowerCase(),
+                    })),
+                    enableGrouping: true
+                };
+            }
+
+            const subColumns = generateColumns(
+                subItems,
+                remainingMeta,
+                values,
+                expandedGroups,
+                toggleGroupExpansion,
+                false,
+                groupId
+            );
+
+            return {
+                header: () => (
+                    <div
+                        onClick={() => toggleGroupExpansion(groupId)}
+                        style={{ cursor: 'pointer' }}
+                    >
+                        {value} {isExpanded ? '▼' : '▶'}
+                    </div>
+                ),
+                id: groupId,
+                columns: isExpanded ? subColumns : [],
+                accessorFn: (row) => row,
+                cell: ({ row, getValue }) => {
+                    const totalValue = calculateTotal(row, value, currentMeta);
+                    return totalValue > 0 ? totalValue : '';
+                }
+            };
+        });
+
+        if (isTopLevel) {
+            return [{
+                header: currentMeta.Name,
+                id: currentMeta.Id,
+                columns: columns
+            }];
+        }
+        return columns;
+    }
+
+    const columns = useMemo(() => {
         const baseColumn = {
             header: data.Rows[0].Name,
             accessorFn: (row) => row,
@@ -104,9 +107,7 @@ export default function PivotTable({ data }) {
                 return value[data.Rows[row.depth].Id];
             },
         };
-
         const groupedColumns = generateColumns(data.Data, data.Columns, data.Values, expandedGroups, toggleGroupExpansion);
-
         return [baseColumn, ...groupedColumns];
     }, [data, expandedGroups]);
 
@@ -211,10 +212,3 @@ export default function PivotTable({ data }) {
         </div>
     )
 }
-
-const CustomHeader = ({ column }) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        {column.columnDef.header}
-        <span>↓ ≡</span>
-    </div>
-);
