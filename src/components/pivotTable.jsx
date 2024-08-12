@@ -112,6 +112,15 @@ export default function PivotTable({ data }) {
         return columns;
     }
 
+    const calculateGrandTotalColumn = function (row) {
+        const rowValue = row.originalSubRows.map(item => {
+            return item
+        })
+
+        const totalValue = rowValue.reduce((sum, item) => sum + item[data.Values[0].Id], 0);
+        return totalValue
+    }
+
     const columns = useMemo(() => {
         const baseColumn = {
             header: data.Rows[0].Name,
@@ -122,8 +131,17 @@ export default function PivotTable({ data }) {
                 return value[data.Rows[row.depth].Id];
             },
         };
+        const grandTotalColumn = {
+            header: "Grand Total",
+            accessorFn: (row) => row,
+            id: 'TotalColumn',
+            cell: ({ row, getValue }) => {
+                const value = calculateGrandTotalColumn(row);
+                return value
+            },
+        };
         const groupedColumns = generateColumns(data.Data, data.Columns, data.Values, expandedGroups, toggleGroupExpansion);
-        return [baseColumn, ...groupedColumns];
+        return [baseColumn, ...groupedColumns, grandTotalColumn];
     }, [data, expandedGroups]);
 
     const visibleColumns = useMemo(() => {
