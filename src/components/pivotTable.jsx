@@ -128,6 +128,9 @@ export default function PivotTable({ data }) {
             id: 'groupedColumn',
             cell: ({ row, getValue }) => {
                 const value = getValue();
+                if (row.original.isGrandTotal) {
+                    return <strong>Grand Total</strong>;
+                }
                 return value[data.Rows[row.depth].Id];
             },
         };
@@ -158,7 +161,7 @@ export default function PivotTable({ data }) {
         const rowID = data.Rows[0].Id;
         const uniqueTopLevelValues = Array.from(new Set(data.Data.map(row => row[rowID]))).sort();
 
-        return uniqueTopLevelValues.map(topLevelValue => ({
+        const regularRows = uniqueTopLevelValues.map(topLevelValue => ({
             [rowID]: topLevelValue,
             subRows: data.Data.filter(row => row[rowID] === topLevelValue)
                 .map(row => ({
@@ -166,6 +169,15 @@ export default function PivotTable({ data }) {
                     subRows: [{ ...row }]
                 }))
         }));
+
+        // Add grand total row
+        const grandTotalRow = {
+            [rowID]: 'Grand Total',
+            isGrandTotal: true,
+            subRows: []
+        };
+
+        return [...regularRows, grandTotalRow];
     }, [data]);
 
     const table = useReactTable({
@@ -184,21 +196,51 @@ export default function PivotTable({ data }) {
     const renderCell = React.useCallback((cell) => {
         const row = cell.row;
         if (cell.column.id === 'groupedColumn') {
+            if (row.original.isGrandTotal) {
+                return <strong>{flexRender(cell.column.columnDef.cell, cell.getContext())}</strong>;
+            }
             return (
                 <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <span style={{ width: `${row.depth * 20}px` }}></span> {/* Add indentation */}
-                    <button
-                        onClick={() => row.toggleExpanded()}
-                        style={{ cursor: 'pointer', marginRight: '5px' }}
-                    >
-                        {row.getIsExpanded() ? '▼' : '▶'}
-                    </button>
+                    <span style={{ width: `${row.depth * 20}px` }}></span>
+                    {!row.original.isGrandTotal && (
+                        <button
+                            onClick={() => row.toggleExpanded()}
+                            style={{ cursor: 'pointer', marginRight: '5px' }}
+                        >
+                            {row.getIsExpanded() ? '▼' : '▶'}
+                        </button>
+                    )}
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </div>
-            )
+            );
         }
-        return flexRender(cell.column.columnDef.cell, cell.getContext())
-    }, [])
+        if (row.original.isGrandTotal) {
+            // Calculate grand total for this column
+            let parts = cell.column.id.split('::');
+            let criteria = {};
+            for (let i = 0; i < parts.length; i += 2) {
+                let key = parts[i];
+                let value = parts[i + 1];
+                criteria[key] = value;
+            }
+
+            const grandTotal = tableData.reduce((sum, dataRow) => {
+                if (!dataRow.isGrandTotal) {
+                    const matchingSubRows = dataRow.subRows.filter(item =>
+                        Object.keys(criteria).every(key => item[key] === criteria[key])
+                    );
+
+                    return sum + matchingSubRows.reduce((subSum, item) =>
+                        subSum + (item[data.Values[0].Id] || 0), 0
+                    );
+                }
+                return sum;
+            }, 0);
+
+            return <strong>{grandTotal}</strong>;
+        }
+        return flexRender(cell.column.columnDef.cell, cell.getContext());
+    }, [tableData, data.Values]);
 
     return (
         <div style={{ height: '700px', overflow: 'auto', background: 'white' }}>
@@ -232,7 +274,10 @@ export default function PivotTable({ data }) {
                 </thead>
                 <tbody>
                     {table.getRowModel().rows.map(row => (
-                        <tr key={row.id}>
+                        <tr
+                            key={row.id}
+                            style={row.original.isGrandTotal ? { fontWeight: 'bold', backgroundColor: '#f0f0f0' } : {}}
+                        >
                             {row.getVisibleCells().map(cell => (
                                 <td key={cell.id} style={{ border: '1px solid black', padding: '8px' }}>
                                     {renderCell(cell)}
