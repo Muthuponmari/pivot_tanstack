@@ -62,7 +62,7 @@ export default function PivotTable({ data }) {
                     id: groupId,
                     columns: values.map(valueCol => ({
                         header: isTopLevel ? valueCol.Name : '',
-                        id: `${groupId}::${valueCol.Id}`,
+                        id: groupId,
                         accessorFn: (row) => row,
                         cell: ({ row, getValue }) => {
                             const totalValue = calculateTotal(row, groupId);
@@ -113,11 +113,16 @@ export default function PivotTable({ data }) {
     }
 
     const calculateGrandTotalColumn = function (row) {
-        const rowValue = row.originalSubRows.map(item => {
-            return item
-        })
+        let rowValue = [];
 
-        const totalValue = rowValue.reduce((sum, item) => sum + item[data.Values[0].Id], 0);
+        if (row.originalSubRows && Array.isArray(row.originalSubRows)) {
+            rowValue = row.originalSubRows;
+        } else if (row.original) {
+            // If it's a leaf node, use the original row data
+            rowValue = [row.original];
+        }
+
+        const totalValue = rowValue.reduce((sum, item) => sum + (item[data.Values[0].Id] || 0), 0);
         return totalValue
     }
 
