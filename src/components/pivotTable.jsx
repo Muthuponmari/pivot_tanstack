@@ -22,34 +22,30 @@ export default function PivotTable({ data }) {
         });
     };
 
+    const calculateTotal = function (row, groupId) {
+        let parts = groupId.split('::');
+        let criteria = {};
+        for (let i = 0; i < parts.length; i += 2) {
+            let key = parts[i];
+            let value = parts[i + 1];
+            criteria[key] = value;
+        }
+        if (!row.originalSubRows || row.originalSubRows.length === 0) {
+            let matches = Object.keys(criteria).every(key => row.original[key] === criteria[key]);
+            return matches ? row.original[data.Values[0].Id] || 0 : 0;
+        }
+        let rowValue = row.originalSubRows.filter(item => {
+            return Object.keys(criteria).every(key => item[key] === criteria[key]);
+        });
+
+        const totalValue = rowValue.reduce((sum, item) => sum + (item[data.Values[0].Id] || 0), 0);
+        return totalValue;
+    }
+
     const generateColumns = function (data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
         const [currentMeta, ...remainingMeta] = columnsMetadata;
         const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
-        const calculateTotal = function (row, groupId) {
-            let parts = groupId.split('::');
-            let criteria = {};
-            for (let i = 0; i < parts.length; i += 2) {
-                let key = parts[i];
-                let value = parts[i + 1];
-                criteria[key] = value;
-            }
-            let value = parts[parts.length - 1];
-            let columnId = parts[parts.length - 2];
 
-            let rowValue = [];
-            if (Array.isArray(row.originalSubRows)) {
-                rowValue = row.originalSubRows.filter(item => {
-                    return Object.keys(criteria).every(key => item[key] === criteria[key]);
-                });
-            }
-            if (!row.originalSubRows) {
-                if (row.original && row.original[columnId] === value) {
-                    rowValue = [row.original];
-                }
-            }
-            const totalValue = rowValue.reduce((sum, item) => sum + item[values[0].Id], 0);
-            return totalValue;
-        }
 
         const columns = uniqueValues.map((value, index) => {
             const groupId = parentId ? `${parentId}::${currentMeta.Id}::${value}` : `${currentMeta.Id}::${value}`;
