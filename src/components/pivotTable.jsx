@@ -1,10 +1,12 @@
-import React, { useMemo, useState } from 'react';
-
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useReactTable, getCoreRowModel, getExpandedRowModel, flexRender } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 
 export default function PivotTable({ data }) {
     const [expandedGroups, setExpandedGroups] = useState([]);
     const [expanded, setExpanded] = React.useState({})
+    const tableContainerRef = useRef(null);
+
 
     const CustomHeader = ({ column }) => (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -192,9 +194,24 @@ export default function PivotTable({ data }) {
         getExpandedRowModel: getExpandedRowModel(),
         getCoreRowModel: getCoreRowModel(),
         debugTable: true,
-    })
+    });
 
-    const renderCell = React.useCallback((cell) => {
+    const rows = table.getRowModel().rows;
+
+    const rowVirtualizer = useVirtualizer({
+        count: rows.length,
+        getScrollElement: () => tableContainerRef.current,
+        estimateSize: () => 35, // rowHeight
+        overscan: 5, // overscanCount
+    });
+
+    const totalHeight = rowVirtualizer.getTotalSize();
+    const virtualRows = rowVirtualizer.getVirtualItems();
+
+    const paddingTop = virtualRows.length > 0 ? virtualRows?.[0]?.start || 0 : 0;
+    const paddingBottom = virtualRows.length > 0 ? totalHeight - (virtualRows?.[virtualRows.length - 1]?.end || 0) : 0;
+
+    const renderCell = useCallback((cell) => {
         const row = cell.row;
         if (cell.column.id === 'groupedColumn') {
             if (row.original.isGrandTotal) {
@@ -244,7 +261,14 @@ export default function PivotTable({ data }) {
     }, [tableData, data.Values]);
 
     return (
-        <div style={{ height: '700px', overflow: 'auto', background: 'white' }}>
+        <div
+            ref={tableContainerRef}
+            style={{
+                height: '700px',
+                overflow: 'auto',
+                background: 'white',
+            }}
+        >
             <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead style={{
                     position: 'sticky',
@@ -274,20 +298,35 @@ export default function PivotTable({ data }) {
                     ))}
                 </thead>
                 <tbody>
-                    {table.getRowModel().rows.map(row => (
-                        <tr
-                            key={row.id}
-                            style={row.original.isGrandTotal ? { fontWeight: 'bold', backgroundColor: '#f0f0f0' } : {}}
-                        >
-                            {row.getVisibleCells().map(cell => (
-                                <td key={cell.id} style={{ border: '1px solid black', padding: '8px' }}>
-                                    {renderCell(cell)}
-                                </td>
-                            ))}
+                    {paddingTop > 0 && (
+                        <tr>
+                            <td style={{ height: `${paddingTop}px` }} />
                         </tr>
-                    ))}
+                    )}
+                    {virtualRows.map((virtualRow) => {
+                        const row = rows[virtualRow.index];
+                        return (
+                            <tr
+                                key={row.id}
+                                style={{
+                                    ...(row.original.isGrandTotal ? { fontWeight: 'bold', backgroundColor: '#f0f0f0' } : {})
+                                }}
+                            >
+                                {row.getVisibleCells().map(cell => (
+                                    <td key={cell.id} style={{ border: '1px solid black', padding: '8px' }}>
+                                        {renderCell(cell)}
+                                    </td>
+                                ))}
+                            </tr>
+                        );
+                    })}
+                    {paddingBottom > 0 && (
+                        <tr>
+                            <td style={{ height: `${paddingBottom}px` }} />
+                        </tr>
+                    )}
                 </tbody>
             </table>
         </div>
-    )
+    );
 }
