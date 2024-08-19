@@ -43,25 +43,52 @@ export default function PivotTable({ data }) {
         return totalValue;
     }
 
+    const generateLeafColumn = (value, groupId) => ({
+        header: value,
+        id: groupId,
+        accessorFn: (row) => row,
+        cell: ({ row }) => {
+            const totalValue = calculateTotal(row, groupId);
+            return totalValue > 0 ? totalValue : '';
+        }
+    });
+
+    const generateBranchColumn = (value, groupId, isExpanded, subColumns, toggleGroupExpansion) => ({
+        header: () => (
+            <div onClick={() => toggleGroupExpansion(groupId)} style={{ cursor: 'pointer' }}>
+                {value} {isExpanded ? '▼' : '▶'}
+            </div>
+        ),
+        id: groupId,
+        columns: isExpanded ? subColumns : [],
+        accessorFn: (row) => row,
+        cell: ({ row }) => {
+            const totalValue = calculateTotal(row, groupId);
+            return totalValue > 0 ? totalValue : '';
+        }
+    });
+
+    const generateTotalColumn = (parentId = '') => ({
+        header: 'Total',
+        id: parentId ? `${parentId}::Total` : 'Total',
+        accessorFn: (row) => row,
+        cell: ({ row }) => {
+            const totalValue = calculateTotal(row, parentId ? `${parentId}::Total` : 'Total');
+            return totalValue > 0 ? totalValue : '';
+        }
+    });
+
     const generateColumns = function (data, columnsMetadata, values, expandedGroups, toggleGroupExpansion, isTopLevel = true, parentId = '') {
         const [currentMeta, ...remainingMeta] = columnsMetadata;
         const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
 
-        const columns = uniqueValues.map((value, index) => {
+        const columns = uniqueValues.map((value) => {
             const groupId = parentId ? `${parentId}::${currentMeta.Id}::${value}` : `${currentMeta.Id}::${value}`;
             const subItems = data.filter(item => item[currentMeta.Id] === value);
             const isExpanded = expandedGroups.includes(groupId);
 
             if (remainingMeta.length === 0) {
-                return {
-                    header: value,
-                    id: groupId,
-                    accessorFn: (row) => row,
-                    cell: ({ row, getValue }) => {
-                        const totalValue = calculateTotal(row, groupId);
-                        return totalValue > 0 ? totalValue : '';
-                    }
-                };
+                return generateLeafColumn(value, groupId);
             }
 
             const subColumns = generateColumns(
@@ -74,62 +101,23 @@ export default function PivotTable({ data }) {
                 groupId
             );
 
-            return {
-                header: () => (
-                    <div
-                        onClick={() => toggleGroupExpansion(groupId)}
-                        style={{ cursor: 'pointer' }}
-                    >
-                        {value} {isExpanded ? '▼' : '▶'}
-                    </div>
-                ),
-                id: groupId,
-                columns: isExpanded ? subColumns : [],
-                accessorFn: (row) => row,
-                cell: ({ row, getValue }) => {
-                    const totalValue = calculateTotal(row, groupId);
-                    return totalValue > 0 ? totalValue : '';
-                }
-            };
+            return generateBranchColumn(value, groupId, isExpanded, subColumns, toggleGroupExpansion);
         });
 
+        if (remainingMeta.length === 0) {
+            columns.push(generateTotalColumn(parentId));
+        }
+
         if (isTopLevel) {
-            const result = [{
+            return [{
                 header: columnsMetadata.map((column, index) => (
                     <span key={index}>{column.Name}</span>
                 )),
                 id: currentMeta.Id,
                 columns: columns
             }];
-
-            // Add total column as a sibling at the last leaf level
-            if (remainingMeta.length === 0) {
-                result.push({
-                    header: 'Total',
-                    id: 'Total',
-                    accessorFn: (row) => row,
-                    cell: ({ row, getValue }) => {
-                        const totalValue = calculateTotal(row, 'Total');
-                        return totalValue > 0 ? totalValue : '';
-                    }
-                });
-            }
-
-            return result;
         }
 
-        // Add total column as a sibling at the last leaf level
-        if (remainingMeta.length === 0) {
-            columns.push({
-                header: 'Total',
-                id: `${parentId}::Total`,
-                accessorFn: (row) => row,
-                cell: ({ row, getValue }) => {
-                    const totalValue = calculateTotal(row, `${parentId}::Total`);
-                    return totalValue > 0 ? totalValue : '';
-                }
-            });
-        }
         return columns;
     }
 
