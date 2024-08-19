@@ -7,7 +7,6 @@ export default function PivotTable({ data }) {
     const [expanded, setExpanded] = React.useState({})
     const tableContainerRef = useRef(null);
 
-
     const CustomHeader = ({ column }) => (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             {column.columnDef.header}
@@ -131,20 +130,17 @@ export default function PivotTable({ data }) {
                 }
             });
         }
-
         return columns;
     }
 
     const calculateGrandTotalColumn = function (row) {
         let rowValue = [];
-
         if (row.originalSubRows && Array.isArray(row.originalSubRows)) {
             rowValue = row.originalSubRows;
         } else if (row.original) {
             // If it's a leaf node, use the original row data
             rowValue = [row.original];
         }
-
         const totalValue = rowValue.reduce((sum, item) => sum + (item[data.Values[0].Id] || 0), 0);
         return totalValue
     }
