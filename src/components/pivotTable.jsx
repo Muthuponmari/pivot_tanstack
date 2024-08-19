@@ -102,7 +102,9 @@ export default function PivotTable({ data }) {
 
         if (isTopLevel) {
             return [{
-                header: currentMeta.Name,
+                header: columnsMetadata.map((column, index) => (
+                    <span key={index}>{column.Name}</span>
+                )),
                 id: currentMeta.Id,
                 columns: columns
             }];
@@ -126,7 +128,11 @@ export default function PivotTable({ data }) {
 
     const columns = useMemo(() => {
         const baseColumn = {
-            header: data.Rows[0].Name,
+            header: <div>{
+                data.Rows.map((row, index) => (
+                    <div key={index}>{row.Name}</div>
+                ))
+            }</div>,
             accessorFn: (row) => row,
             id: 'groupedColumn',
             cell: ({ row, getValue }) => {
@@ -284,7 +290,8 @@ export default function PivotTable({ data }) {
                                     colSpan={header.colSpan}
                                     style={{
                                         padding: '8px',
-                                        border: '1px solid black'
+                                        border: '1px solid black',
+                                        textAlign: 'left'
                                     }}
                                 >
                                     {header.isPlaceholder ? null :
