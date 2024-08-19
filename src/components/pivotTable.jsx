@@ -48,7 +48,6 @@ export default function PivotTable({ data }) {
         const [currentMeta, ...remainingMeta] = columnsMetadata;
         const uniqueValues = [...new Set(data.map(item => item[currentMeta.Id]))].sort();
 
-
         const columns = uniqueValues.map((value, index) => {
             const groupId = parentId ? `${parentId}::${currentMeta.Id}::${value}` : `${currentMeta.Id}::${value}`;
             const subItems = data.filter(item => item[currentMeta.Id] === value);
@@ -58,16 +57,11 @@ export default function PivotTable({ data }) {
                 return {
                     header: value,
                     id: groupId,
-                    columns: values.map(valueCol => ({
-                        header: isTopLevel ? valueCol.Name : '',
-                        id: groupId,
-                        accessorFn: (row) => row,
-                        cell: ({ row, getValue }) => {
-                            const totalValue = calculateTotal(row, groupId);
-                            return totalValue > 0 ? totalValue : '';
-                        }
-                    })),
-                    enableGrouping: true
+                    accessorFn: (row) => row,
+                    cell: ({ row, getValue }) => {
+                        const totalValue = calculateTotal(row, groupId);
+                        return totalValue > 0 ? totalValue : '';
+                    }
                 };
             }
 
@@ -101,14 +95,43 @@ export default function PivotTable({ data }) {
         });
 
         if (isTopLevel) {
-            return [{
+            const result = [{
                 header: columnsMetadata.map((column, index) => (
                     <span key={index}>{column.Name}</span>
                 )),
                 id: currentMeta.Id,
                 columns: columns
             }];
+
+            // Add total column as a sibling at the last leaf level
+            if (remainingMeta.length === 0) {
+                result.push({
+                    header: 'Total',
+                    id: 'Total',
+                    accessorFn: (row) => row,
+                    cell: ({ row, getValue }) => {
+                        const totalValue = calculateTotal(row, 'Total');
+                        return totalValue > 0 ? totalValue : '';
+                    }
+                });
+            }
+
+            return result;
         }
+
+        // Add total column as a sibling at the last leaf level
+        if (remainingMeta.length === 0) {
+            columns.push({
+                header: 'Total',
+                id: `${parentId}::Total`,
+                accessorFn: (row) => row,
+                cell: ({ row, getValue }) => {
+                    const totalValue = calculateTotal(row, `${parentId}::Total`);
+                    return totalValue > 0 ? totalValue : '';
+                }
+            });
+        }
+
         return columns;
     }
 
