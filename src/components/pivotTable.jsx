@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useReactTable, getCoreRowModel, getExpandedRowModel, flexRender } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import '../index.css'
+
 
 export default function PivotTable({ data }) {
     const [expandedGroups, setExpandedGroups] = useState([]);
@@ -55,8 +57,8 @@ export default function PivotTable({ data }) {
 
     const generateBranchColumn = (value, groupId, isExpanded, subColumns, toggleGroupExpansion) => ({
         header: () => (
-            <div onClick={() => toggleGroupExpansion(groupId)} style={{ cursor: 'pointer' }}>
-                {value} {isExpanded ? '▼' : '▶'}
+            <div onClick={() => toggleGroupExpansion(groupId)} style={{ cursor: 'pointer', color: '#545c6b' }}>
+                <span style={{ color: '#545c6b' }}> {isExpanded ? '▼' : '▶'}</span> <span>{value}</span>
             </div>
         ),
         id: groupId,
@@ -111,7 +113,7 @@ export default function PivotTable({ data }) {
         if (isTopLevel) {
             return [{
                 header: columnsMetadata.map((column, index) => (
-                    <span key={index}>{column.Name}</span>
+                    <span style={{ paddingRight: '20px' }} key={index}>{column.Name}</span>
                 )),
                 id: currentMeta.Id,
                 columns: columns
@@ -234,12 +236,12 @@ export default function PivotTable({ data }) {
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ width: `${row.depth * 20}px` }}></span>
                     {!row.original.isGrandTotal && (
-                        <button
+                        <div
                             onClick={() => row.toggleExpanded()}
                             style={{ cursor: 'pointer', marginRight: '5px' }}
                         >
                             {row.getIsExpanded() ? '▼' : '▶'}
-                        </button>
+                        </div>
                     )}
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </div>
@@ -282,12 +284,13 @@ export default function PivotTable({ data }) {
                 background: 'white',
             }}
         >
-            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', color: '#282B2F' }}>
                 <thead style={{
                     position: 'sticky',
                     top: 0,
                     zIndex: 1,
-                    background: '#ddd',
+                    background: '#ffffff',
+                    border: '1px solid #f0f3f7',
                 }}>
                     {table.getHeaderGroups().map(headerGroup => (
                         <tr key={headerGroup.id}>
@@ -297,8 +300,10 @@ export default function PivotTable({ data }) {
                                     colSpan={header.colSpan}
                                     style={{
                                         padding: '8px',
-                                        border: '1px solid black',
-                                        textAlign: 'left'
+                                        border: '1px solid #f0f3f7',
+                                        textAlign: 'left',
+                                        minWidth: `${header.column.getSize()}px`,
+                                        width: `${header.column.getSize()}px`,
                                     }}
                                 >
                                     {header.isPlaceholder ? null :
@@ -327,7 +332,7 @@ export default function PivotTable({ data }) {
                                 }}
                             >
                                 {row.getVisibleCells().map(cell => (
-                                    <td key={cell.id} style={{ border: '1px solid black', padding: '8px' }}>
+                                    <td key={cell.id} style={{ border: '1px solid #f0f3f7', padding: '8px' }}>
                                         {renderCell(cell)}
                                     </td>
                                 ))}
