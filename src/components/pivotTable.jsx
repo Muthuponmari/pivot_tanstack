@@ -105,8 +105,7 @@ export default function PivotTable({ data }) {
 
             return generateBranchColumn(value, groupId, isExpanded, subColumns, toggleGroupExpansion);
         });
-
-        if (remainingMeta.length === 0) {
+        if (!isTopLevel) {
             columns.push(generateTotalColumn(parentId));
         }
 
