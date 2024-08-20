@@ -204,6 +204,8 @@ export default function PivotTable({ data }) {
         state: {
             expanded
         },
+        enableColumnResizing: true,
+        columnResizeMode: 'onChange',
         onExpandedChange: setExpanded,
         getSubRows: row => row.subRows,
         getExpandedRowModel: getExpandedRowModel(),
@@ -311,6 +313,15 @@ export default function PivotTable({ data }) {
                                             <CustomHeader column={header.column} /> :
                                             flexRender(header.column.columnDef.header, header.getContext())
                                     }
+                                    {header.column.getCanResize() && (
+                                        <div
+                                            onMouseDown={header.getResizeHandler()}
+                                            onTouchStart={header.getResizeHandler()}
+                                            className={`resizer ${
+                                                header.column.getIsResizing() ? 'isResizing' : ''
+                                                }`}
+                                        ></div>
+                                    )}
                                 </th>
                             ))}
                         </tr>
