@@ -1,19 +1,20 @@
 import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { useReactTable, getCoreRowModel, getExpandedRowModel, flexRender } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Tooltip } from "./tooltip";
 import '../index.css'
 
+const CustomHeader = React.memo(({ column }) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {column.columnDef.header}
+    </div>
+));
 
 export default function PivotTable({ data }) {
     const [expandedGroups, setExpandedGroups] = useState([]);
-    const [expanded, setExpanded] = React.useState({})
+    const [expanded, setExpanded] = React.useState({});
+    const [tooltipData, setTooltipData] = useState(null);
     const tableContainerRef = useRef(null);
-
-    const CustomHeader = ({ column }) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            {column.columnDef.header}
-        </div>
-    );
 
     const toggleGroupExpansion = (groupId) => {
         setExpandedGroups(prev => {
@@ -24,6 +25,14 @@ export default function PivotTable({ data }) {
             }
         });
     };
+
+    const handleTooltipShow = useCallback((rowData, columnId, rowDepth, value) => {
+        setTooltipData({ rowData, columnId, rowDepth, value });
+    }, []);
+
+    const handleTooltipHide = useCallback(() => {
+        setTooltipData(null);
+    }, []);
 
     const calculateTotal = function (row, groupId) {
         let parts = groupId.split('::');
@@ -45,18 +54,30 @@ export default function PivotTable({ data }) {
         return totalValue;
     }
 
-    const generateLeafColumn = (value, groupId) => ({
+    const generateLeafColumn = useCallback((value, groupId) => ({
         header: value,
         id: groupId,
         accessorFn: (row) => row,
-        cell: ({ row }) => {
+        cell: ({ row, column }) => {
             const totalValue = calculateTotal(row, groupId);
-            return totalValue > 0 ? totalValue : '';
+            const isTooltipVisible = tooltipData &&
+                tooltipData.columnId === column.id &&
+                tooltipData.rowData === row.original;
+            return (
+                <div
+                    onMouseEnter={() => handleTooltipShow(row.original, column.id, row.depth, totalValue)}
+                    onMouseLeave={handleTooltipHide}
+                    style={{ position: 'relative' }}
+                >
+                    {totalValue > 0 ? totalValue : ''}
+                    {isTooltipVisible && <Tooltip rowData={tooltipData} rows={data.Rows} columns={data.Columns} />}
+                </div>
+            );
         }
-    });
+    }), [calculateTotal, handleTooltipShow, handleTooltipHide, tooltipData]);
 
-    const generateBranchColumn = (value, groupId, isExpanded, subColumns, toggleGroupExpansion) => ({
-        header: () => (
+    const generateBranchColumn = useCallback((value, groupId, isExpanded, subColumns, toggleGroupExpansion) => ({
+        header: ({ column }) => (
             <div onClick={() => toggleGroupExpansion(groupId)} style={{ cursor: 'pointer', color: '#545c6b' }}>
                 <span style={{ color: '#545c6b' }}> {isExpanded ? '▼' : '▶'}</span> <span>{value}</span>
             </div>
@@ -64,19 +85,45 @@ export default function PivotTable({ data }) {
         id: groupId,
         columns: isExpanded ? subColumns : [],
         accessorFn: (row) => row,
-        cell: ({ row }) => {
+        cell: ({ row, column }) => {
             const totalValue = calculateTotal(row, groupId);
-            return totalValue > 0 ? totalValue : '';
+            const isTooltipVisible = tooltipData &&
+                tooltipData.columnId === column.id &&
+                tooltipData.rowData === row.original
+
+            return (
+                <div
+                    onMouseEnter={() => handleTooltipShow(row.original, column.id, row.depth, totalValue)}
+                    onMouseLeave={handleTooltipHide}
+                    style={{ position: 'relative' }}
+                >
+                    {totalValue > 0 ? totalValue : ''}
+                    {isTooltipVisible && <Tooltip rowData={tooltipData} rows={data.Rows} columns={data.Columns} />}
+                </div>
+            );
         }
-    });
+    }), [calculateTotal, handleTooltipShow, handleTooltipHide, tooltipData]);
 
     const generateTotalColumn = (parentId = '') => ({
         header: 'Total',
         id: parentId ? `${parentId}::Total` : 'Total',
         accessorFn: (row) => row,
-        cell: ({ row }) => {
+        cell: ({ row, column }) => {
             const totalValue = calculateTotal(row, parentId ? `${parentId}::Total` : 'Total');
-            return totalValue > 0 ? totalValue : '';
+            const columnId = column.id.split('::').slice(0, -1).join('::');
+            const isTooltipVisible = tooltipData &&
+                tooltipData.columnId === columnId &&
+                tooltipData.rowData === row.original
+            return (
+                <div
+                    onMouseEnter={() => handleTooltipShow(row.original, columnId, row.depth, totalValue)}
+                    onMouseLeave={handleTooltipHide}
+                    style={{ position: 'relative' }}
+                >
+                    {totalValue > 0 ? totalValue : ''}
+                    {isTooltipVisible && <Tooltip rowData={tooltipData} rows={data.Rows} columns={data.Columns} />}
+                </div>
+            );
         }
     });
 
@@ -162,7 +209,7 @@ export default function PivotTable({ data }) {
         };
         const groupedColumns = generateColumns(data.Data, data.Columns, data.Values, expandedGroups, toggleGroupExpansion);
         return [baseColumn, ...groupedColumns, grandTotalColumn];
-    }, [data, expandedGroups]);
+    }, [data, expandedGroups, tooltipData]);
 
     const visibleColumns = useMemo(() => {
         return columns.map(col => ({
@@ -201,7 +248,8 @@ export default function PivotTable({ data }) {
         data: tableData,
         columns: visibleColumns,
         state: {
-            expanded
+            expanded,
+            tooltipData
         },
         enableColumnResizing: true,
         columnResizeMode: 'onChange',
@@ -236,7 +284,7 @@ export default function PivotTable({ data }) {
             return (
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ width: `${row.depth * 20}px` }}></span>
-                    {!row.original.isGrandTotal && (
+                    {!row.original.isGrandTotal && row.subRows?.length > 0 && (
                         <div
                             onClick={() => row.toggleExpanded()}
                             style={{ cursor: 'pointer', marginRight: '5px' }}
@@ -274,7 +322,7 @@ export default function PivotTable({ data }) {
             return <strong>{grandTotal}</strong>;
         }
         return flexRender(cell.column.columnDef.cell, cell.getContext());
-    }, [tableData, data.Values]);
+    }, [tooltipData, tableData, data.Values]);
 
     return (
         <div
