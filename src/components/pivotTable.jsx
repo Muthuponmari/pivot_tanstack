@@ -34,25 +34,28 @@ export default function PivotTable({ data }) {
         setTooltipData(null);
     }, []);
 
-    const calculateTotal = function (row, groupId) {
-        let parts = groupId.split('::');
-        let criteria = {};
-        for (let i = 0; i < parts.length; i += 2) {
-            let key = parts[i];
-            let value = parts[i + 1];
-            criteria[key] = value;
-        }
-        if (!row.originalSubRows || row.originalSubRows.length === 0) {
-            let matches = Object.keys(criteria).every(key => row.original[key] === criteria[key]);
-            return matches ? row.original[data.Values[0].Id] || 0 : 0;
-        }
-        let rowValue = row.originalSubRows.filter(item => {
-            return Object.keys(criteria).every(key => item[key] === criteria[key]);
-        });
+    const calculateTotal = useCallback((row, columnId) => {
+        if (!row) return 0;
 
-        const totalValue = rowValue.reduce((sum, item) => sum + (item[data.Values[0].Id] || 0), 0);
-        return totalValue;
-    }
+        let total = 0;
+        const parts = columnId.split('::');
+        const criteria = {};
+        for (let i = 0; i < parts.length; i += 2) {
+            criteria[parts[i]] = parts[i + 1];
+        }
+
+        const matchesCriteria = (item) => {
+            return Object.keys(criteria).every(key => item[key] == criteria[key]);
+        };
+
+        if (row.subRows) {
+            total = row.subRows.reduce((sum, subRow) => sum + calculateTotal(subRow, columnId), 0);
+        } else if (matchesCriteria(row)) {
+            total = row[data.Values[0].Id] || 0;
+        }
+
+        return total;
+    }, [data.Values]);
 
     const generateLeafColumn = useCallback((value, groupId) => ({
         header: value,
@@ -170,16 +173,25 @@ export default function PivotTable({ data }) {
     }
 
     const calculateGrandTotalColumn = function (row) {
-        let rowValue = [];
+        const totalValue = (subRows) => {
+            return subRows.reduce((sum, item) => {
+                if (item.subRows && item.subRows.length > 0) {
+                    return sum + totalValue(item.subRows);
+                } else {
+                    return sum + (item[data.Values[0].Id] || 0);
+                }
+            }, 0);
+        };
+
         if (row.originalSubRows && Array.isArray(row.originalSubRows)) {
-            rowValue = row.originalSubRows;
+            return totalValue(row.originalSubRows);
         } else if (row.original) {
             // If it's a leaf node, use the original row data
-            rowValue = [row.original];
+            return row.original[data.Values[0].Id] || 0;
         }
-        const totalValue = rowValue.reduce((sum, item) => sum + (item[data.Values[0].Id] || 0), 0);
-        return totalValue
-    }
+
+        return 0; // Return 0 if no valid data is found
+    };
 
     const columns = useMemo(() => {
         const baseColumn = {
@@ -222,23 +234,44 @@ export default function PivotTable({ data }) {
     }, [columns, expandedGroups]);
 
     const tableData = useMemo(() => {
-        const rowID = data.Rows[0].Id;
-        const uniqueTopLevelValues = Array.from(new Set(data.Data.map(row => row[rowID]))).sort();
+        const createNestedStructure = (rows, depth = 0) => {
+            if (depth >= data.Rows.length) {
+                return rows;
+            }
 
-        const regularRows = uniqueTopLevelValues.map(topLevelValue => ({
-            [rowID]: topLevelValue,
-            subRows: data.Data.filter(row => row[rowID] === topLevelValue)
-                .map(row => ({
-                    ...row,
-                    subRows: [{ ...row }]
-                }))
-        }));
+            const rowID = data.Rows[depth].Id;
+            const uniqueValues = Array.from(new Set(rows.map(row => row[rowID]))).sort();
+
+            return uniqueValues.map(value => {
+                const subRows = rows.filter(row => row[rowID] === value);
+                const nestedSubRows = createNestedStructure(subRows, depth + 1);
+
+                const combinedRow = subRows.reduce((acc, row) => {
+                    Object.keys(row).forEach(key => {
+                        if (data.Columns.some(col => col.Id === key) || key === data.Values[0].Id) {
+                            acc[key] = (acc[key] || 0) + (row[key] || 0);
+                        } else if (!acc[key]) {
+                            acc[key] = row[key];
+                        }
+                    });
+                    return acc;
+                }, {});
+
+                return {
+                    ...combinedRow,
+                    [rowID]: value,
+                    subRows: nestedSubRows.length > 0 ? nestedSubRows : undefined,
+                    depth: depth
+                };
+            });
+        };
+
+        const regularRows = createNestedStructure(data.Data);
 
         // Add grand total row
         const grandTotalRow = {
-            [rowID]: 'Grand Total',
+            [data.Rows[0].Id]: 'Grand Total',
             isGrandTotal: true,
-            subRows: []
         };
 
         return [...regularRows, grandTotalRow];
@@ -281,10 +314,14 @@ export default function PivotTable({ data }) {
             if (row.original.isGrandTotal) {
                 return <strong>{flexRender(cell.column.columnDef.cell, cell.getContext())}</strong>;
             }
+
+            const hasSubRows = row.original.subRows && row.original.subRows.length > 0;
+            const isLeafNode = row.original.depth === data.Rows.length - 1;
+            console.log(hasSubRows);
             return (
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ width: `${row.depth * 20}px` }}></span>
-                    {!row.original.isGrandTotal && row.subRows?.length > 0 && (
+                    {hasSubRows && !isLeafNode && (
                         <div
                             onClick={() => row.toggleExpanded()}
                             style={{ cursor: 'pointer', marginRight: '5px' }}
@@ -296,33 +333,18 @@ export default function PivotTable({ data }) {
                 </div>
             );
         }
+
+        const value = calculateTotal(row.original, cell.column.id);
+
         if (row.original.isGrandTotal) {
-            // Calculate grand total for this column
-            let parts = cell.column.id.split('::');
-            let criteria = {};
-            for (let i = 0; i < parts.length; i += 2) {
-                let key = parts[i];
-                let value = parts[i + 1];
-                criteria[key] = value;
-            }
-
-            const grandTotal = tableData.reduce((sum, dataRow) => {
-                if (!dataRow.isGrandTotal) {
-                    const matchingSubRows = dataRow.subRows.filter(item =>
-                        Object.keys(criteria).every(key => item[key] === criteria[key])
-                    );
-
-                    return sum + matchingSubRows.reduce((subSum, item) =>
-                        subSum + (item[data.Values[0].Id] || 0), 0
-                    );
-                }
-                return sum;
-            }, 0);
-
+            const grandTotal = tableData
+                .filter(row => !row.isGrandTotal)
+                .reduce((sum, row) => sum + calculateTotal(row, cell.column.id), 0);
             return <strong>{grandTotal}</strong>;
         }
-        return flexRender(cell.column.columnDef.cell, cell.getContext());
-    }, [tooltipData, tableData, data.Values]);
+
+        return value > 0 ? value : '';
+    }, [tableData, calculateTotal]);
 
     return (
         <div
